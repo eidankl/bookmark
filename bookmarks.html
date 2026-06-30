@@ -216,6 +216,39 @@
       border-color: #f87171;
       color: #f87171;
     }
+
+    .search-wrap {
+      position: relative;
+      margin-bottom: 1rem;
+    }
+
+    .search-wrap svg {
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      color: #3d4466;
+      pointer-events: none;
+    }
+
+    #search {
+      width: 100%;
+      padding: 0.6rem 0.9rem 0.6rem 2.25rem;
+      background: #12151f;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    #search::placeholder { color: #3d4466; }
+    #search:focus { border-color: #6366f1; }
+
+    .highlight { color: #a78bfa; font-weight: 700; }
   </style>
 </head>
 <body>
@@ -241,6 +274,12 @@
 
     <div class="card">
       <h2>Saved Bookmarks</h2>
+      <div class="search-wrap">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="text" id="search" placeholder="Search bookmarks…" autocomplete="off">
+      </div>
       <div id="bookmark-count"></div>
       <div id="bookmark-list"></div>
     </div>
@@ -268,16 +307,26 @@
       catch { return ''; }
     }
 
+    function highlight(text, query) {
+      if (!query) return escHtml(text);
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return escHtml(text).replace(
+        new RegExp(escaped.replace(/&amp;|&lt;|&gt;|&quot;|&#39;/g, m => m), 'gi'),
+        m => `<span class="highlight">${m}</span>`
+      );
+    }
+
     function render() {
       const bookmarks = load();
+      const query = document.getElementById('search').value.trim().toLowerCase();
+      const filtered = query
+        ? bookmarks.filter(bm => bm.title.toLowerCase().includes(query))
+        : bookmarks;
       const list = document.getElementById('bookmark-list');
       const count = document.getElementById('bookmark-count');
 
-      count.textContent = bookmarks.length === 0
-        ? ''
-        : `${bookmarks.length} bookmark${bookmarks.length === 1 ? '' : 's'}`;
-
       if (bookmarks.length === 0) {
+        count.textContent = '';
         list.innerHTML = `
           <div class="empty-state">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -289,12 +338,30 @@
         return;
       }
 
-      list.innerHTML = bookmarks.map((bm, i) => `
+      count.textContent = query
+        ? `${filtered.length} of ${bookmarks.length} bookmark${bookmarks.length === 1 ? '' : 's'}`
+        : `${bookmarks.length} bookmark${bookmarks.length === 1 ? '' : 's'}`;
+
+      if (filtered.length === 0) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+            </svg>
+            <p>No bookmarks match "<strong>${escHtml(query)}</strong>"</p>
+          </div>`;
+        return;
+      }
+
+      list.innerHTML = filtered.map((bm) => {
+        const i = bookmarks.indexOf(bm);
+        return `
         <div class="bookmark-item" data-index="${i}">
           <img class="favicon" src="${faviconUrl(bm.url)}" alt=""
             onerror="this.style.visibility='hidden'">
           <div class="bookmark-info">
-            <div class="bookmark-title">${escHtml(bm.title)}</div>
+            <div class="bookmark-title">${highlight(bm.title, query)}</div>
             <div class="bookmark-url">
               <a href="${escHtml(bm.url)}" target="_blank" rel="noopener noreferrer">
                 ${escHtml(bm.url)}
@@ -302,8 +369,8 @@
             </div>
           </div>
           <button class="btn-delete" data-index="${i}" title="Delete">Delete</button>
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
     }
 
     function escHtml(str) {
@@ -340,6 +407,8 @@
     document.getElementById('input-title').addEventListener('keydown', e => {
       if (e.key === 'Enter') document.getElementById('input-url').focus();
     });
+
+    document.getElementById('search').addEventListener('input', render);
 
     document.getElementById('bookmark-list').addEventListener('click', e => {
       const btn = e.target.closest('.btn-delete');
